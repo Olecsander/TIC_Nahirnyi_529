@@ -1,64 +1,110 @@
-import os
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy import signal, fft
+from scipy.signal import butter, sosfiltfilt
+from scipy.fft import fft, fftshift, fftfreq
 
-# Signal parameters
-a = 0       # Mean value
-b = 10      # Standard deviation
-n = 500     # Number of points
-Fs = 1000   # Sampling frequency (Hz)
-F_max = 25  # Maximum signal frequency (Hz)
+# Вхідні параметри
+n = 500
+Fs = 1000
+F_max = 23
+F_filter = 30
+Dt_values = [2, 4, 8, 16]
 
-# Generate a random signal
-signal_data = np.random.normal(a, b, n)
+time = np.arange(n) / Fs
+signal = np.random.randn(n)
 
-# Time scale
-time_values = np.arange(n) / Fs
-
-# Normalize frequency (calculation for Butterworth LPF)
+# Фільтрація вихідного сигналу
 w = F_max / (Fs / 2)
-sos = signal.butter(3, w, 'low', output='sos')
+filter_params = butter(3, w, 'low', output='sos')
+filtered_signal = sosfiltfilt(filter_params, signal)
 
-# Bidirectional filtering (avoiding phase shift)
-filtered_signal = signal.sosfiltfilt(sos, signal_data)
+discrete_signals = []
+discrete_spectrums = []
+reconstructed_signals = []
+variances = []
+snr_values = []
 
-# Function for plotting and saving graphs
-def plot_signal(x, y, title, xlabel, ylabel, filename):
-    save_dir = "./figures"
-    os.makedirs(save_dir, exist_ok=True)
-    save_path = f"{save_dir}/{filename}.png"
+for Dt in Dt_values:
+    discrete_signal = np.zeros(n)
+    for i in range(0, round(n / Dt)):
+        index = i * Dt
+        if index < n:
+            discrete_signal[index] = filtered_signal[index]
+    discrete_signals.append(list(discrete_signal))
 
-    fig, ax = plt.subplots(figsize=(21 / 2.54, 14 / 2.54))  # 21 cm × 14 cm
-    ax.plot(x, y, linewidth=1, color='tab:blue')
+    spectrum = fftshift(fft(discrete_signal))
+    discrete_spectrums.append(list(np.abs(spectrum)))
 
-    ax.set_xlabel(xlabel, fontsize=14)
-    ax.set_ylabel(ylabel, fontsize=14)
-    plt.title(title, fontsize=14)
+    w_filter = F_filter / (Fs / 2)
+    filter_params = butter(3, w_filter, 'low', output='sos')
+    reconstructed_signal = sosfiltfilt(filter_params, discrete_signal)
+    reconstructed_signals.append(list(reconstructed_signal))
 
-    ax.grid(True, linestyle='--', linewidth=0.5, alpha=0.7)
+    E1 = reconstructed_signal - filtered_signal
+    variance_signal = np.var(filtered_signal)
+    variance_E1 = np.var(E1)
+    snr = variance_signal / variance_E1 if variance_E1 != 0 else np.inf
 
-    # Save the image with improved parameters
-    fig.savefig(save_path, dpi=600, bbox_inches='tight', transparent=True)
+    variances.append(variance_E1)
+    snr_values.append(snr)
 
-    plt.show()
+# Побудова графіків дискретизованих сигналів
+fig, ax = plt.subplots(2, 2, figsize=(21 / 2.54, 14 / 2.54))
+s = 0
+for i in range(2):
+    for j in range(2):
+        ax[i][j].plot(time, discrete_signals[s], linewidth=1)
+        s += 1
+fig.supxlabel("Час (с)", fontsize=14)
+fig.supylabel("Амплітуда сигналу", fontsize=14)
+fig.suptitle("Сигнал з кроком дискретизації Dt = (2, 4, 8, 16)", fontsize=14)
+fig.savefig("./figures/discrete_signals.png", dpi=600)
+plt.close(fig)
 
+# Побудова графіків спектрів
+fig, ax = plt.subplots(2, 2, figsize=(21 / 2.54, 14 / 2.54))
+s = 0
+freqs = fftshift(fftfreq(n, 1 / Fs))
+for i in range(2):
+    for j in range(2):
+        ax[i][j].plot(freqs, discrete_spectrums[s], linewidth=1)
+        s += 1
+fig.supxlabel("Частота (Гц)", fontsize=14)
+fig.supylabel("Амплітуда спектру", fontsize=14)
+fig.suptitle("Спектри сигналів з кроком дискретизації Dt = (2, 4, 8, 16)", fontsize=14)
+fig.savefig("./figures/discrete_spectrums.png", dpi=600)
+plt.close(fig)
 
-# Plot the filtered signal
-plot_signal(time_values, filtered_signal,
-            "Сигнал з максимальною частотою F_max = 25 Гц",
-            "Час (секунди)",
-            "Амплітуда сигналу",
-            "filtered_signal")
+# Побудова графіків відновлених сигналів
+fig, ax = plt.subplots(2, 2, figsize=(21 / 2.54, 14 / 2.54))
+s = 0
+for i in range(2):
+    for j in range(2):
+        ax[i][j].plot(time, reconstructed_signals[s], linewidth=1)
+        ax[i][j].grid(True)
+        s += 1
+fig.supxlabel("Час (с)", fontsize=14)
+fig.supylabel("Амплітуда сигналу", fontsize=14)
+fig.suptitle("Відновлені  аналогові сигнали з кроком дискретизації Dt = (2, 4, 8, 16)", fontsize=14)
+fig.savefig("./figures/reconstructed_signals.png", dpi=600)
+plt.close(fig)
 
-# Compute and plot the signal spectrum
-spectrum = fft.fft(filtered_signal)
-spectrum_magnitude = np.abs(fft.fftshift(spectrum))  # Magnitude of the amplitude spectrum
-freq_values = fft.fftshift(fft.fftfreq(n, 1 / Fs))  # Scaled frequency values
+# Графік залежності дисперсії від кроку дискретизації
+plt.figure(figsize=(21 / 2.54, 14 / 2.54))
+plt.plot(Dt_values, variances, marker='o', linewidth=1)
+plt.grid(True)
+plt.xlabel("Крок дискретизації", fontsize=14)
+plt.ylabel("Дисперсія", fontsize=14)
+plt.title("Залежність дисперсії від кроку дискретизації", fontsize=14)
+plt.savefig("./figures/variance_vs_dt.png", dpi=600)
+plt.close()
 
-#  Plot the spectrum
-plot_signal(freq_values, spectrum_magnitude,
-            "Спектр сигналу з максимальною частотою F_max = 25 Гц",
-            "Частота (Гц)",
-            "Амплітуда спектра",
-            "signal_spectrum")
+# Графік співвідношення сигнал-шум від дисперсії
+plt.figure(figsize=(21 / 2.54, 14 / 2.54))
+plt.plot(Dt_values, snr_values, marker='o', linewidth=1)
+plt.grid(True)
+plt.xlabel("Крок дискретизації", fontsize=14)
+plt.ylabel("ССШ", fontsize=14)
+plt.title("Залежність співвідношення сигнал-шум від кроку дискретизації", fontsize=14)
+plt.savefig("./figures/snr_vs_dt.png", dpi=600)
+plt.close()
