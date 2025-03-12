@@ -42,9 +42,12 @@ def generate_sequence_4(n_sequence=100, surname="Нагірний", group="529")
     return "".join(sequence)
 
 
-def generate_sequence_5(n_sequence=100, surname="Нагірний", group="529"):
-    elements = list(surname[:2]) + list(group)
-    sequence = [random.choice(elements) for _ in range(n_sequence)]
+def generate_sequence_5(n_sequence=100):
+    alphabet = ['н', 'а', '5', '2', '9']
+    Pi = 0.2
+    length = Pi * n_sequence
+    sequence = alphabet * int(length)
+    random.shuffle(sequence)
     return "".join(sequence)
 
 
@@ -59,7 +62,7 @@ def generate_sequence_6(n_sequence=100, surname="Нагірний", group="529")
 
 
 def generate_sequence_7(n_sequence=100):
-    elements = string.ascii_lowercase + string.digits
+    elements = list(string.ascii_lowercase) + list(string.digits)
     sequence = [random.choice(elements) for _ in range(n_sequence)]
     return "".join(sequence)
 
